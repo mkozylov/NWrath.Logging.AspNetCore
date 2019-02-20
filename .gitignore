@@ -3,3 +3,5 @@
 ################################################################################
 
 /.vs
+/NWrath.Logging.AspNetCore/bin
+/NWrath.Logging.AspNetCore/obj

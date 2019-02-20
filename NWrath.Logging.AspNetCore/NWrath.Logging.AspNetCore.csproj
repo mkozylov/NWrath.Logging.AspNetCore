@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Authors>Kozylov Mikhail</Authors>
+    <Company>-</Company>
+    <Copyright>Kozylov Mikhail</Copyright>
+    <PackageLicenseUrl>https://github.com/mkozylov/NWrath.Logging.AspNetCore/blob/master/LICENSE</PackageLicenseUrl>
+    <PackageProjectUrl>https://github.com/mkozylov/NWrath.Logging.AspNetCore/wiki</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/mkozylov/NWrath.Logging.AspNetCore/</RepositoryUrl>
+    <Description>NWrath.Logging integration for  ASP.NET Core 2+</Description>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Hosting.Abstractions" Version="2.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="2.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="2.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Configuration" Version="2.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="2.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="2.0.0" />
+    <PackageReference Include="NWrath.Logging" Version="1.0.12" />
+  </ItemGroup>
+
+</Project>
