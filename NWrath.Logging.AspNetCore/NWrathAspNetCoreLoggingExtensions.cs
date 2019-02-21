@@ -17,9 +17,11 @@ namespace NWrath.Logging.AspNetCore
             LogLevel minLevel = LogLevel.Error
             )
         {
-            return hostBuilder.UseNWrathLogging(
+            var baseLogger = DefaultLoggerSet(
                 LoggingWizard.Spell.RollingFileLogger(folderPath, minLevel: minLevel)
                 );
+
+            return hostBuilder.UseNWrathLogging(baseLogger);
         }
 
         public static IWebHostBuilder UseNWrathDbLogging(
@@ -75,10 +77,9 @@ namespace NWrath.Logging.AspNetCore
             LogLevel minLevel = LogLevel.Error
             )
         {
-            var baseLogger = LoggingWizard.Spell.BackgroundLogger(
-                b => b.DbLogger(minLevel, dbSchemaApply),
-                emergencyLogger: emergencyLogger,
-                minLevel: minLevel
+            var baseLogger = DefaultLoggerSet(
+                LoggingWizard.Spell.DbLogger(minLevel, dbSchemaApply),
+                emergencyLogger
                 );
 
             return hostBuilder.UseNWrathLogging(baseLogger);
@@ -105,8 +106,6 @@ namespace NWrath.Logging.AspNetCore
                 configure = (lg, cfg, ctx) =>
                 {
                     ctx.ClearProviders();
-                    ctx.AddDebug();
-                    ctx.AddConsole();
                     ctx.AddNWrathProvider(lg);
                 };
             }
@@ -145,6 +144,34 @@ namespace NWrath.Logging.AspNetCore
                 default:
                     return LogLevel.Critical;
             }
+        }
+
+        private static ILogger DefaultLoggerSet(ILogger baseLogger, ILogger emergencyLogger = null)
+        {
+            var targetLogger = baseLogger;
+
+            if (Environment.UserInteractive)
+            {
+                var console = LoggingWizard.Spell.ConsoleLogger(s =>
+                {
+                    s.OutputTemplate = "[{Level}] {Message}{ExNewLine}{Exception}";
+                });
+
+                targetLogger = LoggingWizard.Spell.LambdaLogger(
+                    record =>
+                    {
+                        console.Log(record);
+                        baseLogger.Log(record);
+                    },
+                    batch =>
+                    {
+                        console.Log(batch);
+                        baseLogger.Log(batch);
+                    }
+                );
+            }
+
+            return LoggingWizard.Spell.BackgroundLogger(targetLogger, emergencyLogger: emergencyLogger);
         }
     }
 }
