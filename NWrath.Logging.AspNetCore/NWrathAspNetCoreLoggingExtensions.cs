@@ -1,11 +1,8 @@
 ﻿using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.DependencyInjection;
-using System;
-using System.Collections.Generic;
-using System.Text;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using System;
 
 namespace NWrath.Logging.AspNetCore
 {
@@ -92,6 +89,13 @@ namespace NWrath.Logging.AspNetCore
             return hostBuilder.UseNWrathLogging(logger);
         }
 
+        public static IWebHostBuilder UseNWrathLogging(this IWebHostBuilder hostBuilder, Func<ILoggingWizardCharms, ILogger[]> loggersFactory, Action<ILogger, IConfiguration, ILoggingBuilder> configure = null, LogLevel minLevel = LogLevel.Error)
+        {
+            var baseLogger = LoggingWizard.Spell.CompositeLogger(minLevel, loggersFactory(LoggingWizard.Spell));
+
+            return hostBuilder.UseNWrathLogging(baseLogger, configure);
+        }
+
         public static IWebHostBuilder UseNWrathLogging(this IWebHostBuilder hostBuilder, Func<ILoggingWizardCharms, ILogger> loggerFactory, Action<ILogger, IConfiguration, ILoggingBuilder> configure = null)
         {
             var baseLogger = loggerFactory(LoggingWizard.Spell);
@@ -112,6 +116,7 @@ namespace NWrath.Logging.AspNetCore
 
             return hostBuilder.ConfigureServices((context, collection) =>
             {
+                Logger.Instance = logger;
                 collection.AddSingleton(logger);
                 collection.AddLogging(builder => configure(logger, context.Configuration, builder));
             });
@@ -120,6 +125,20 @@ namespace NWrath.Logging.AspNetCore
         public static ILoggingBuilder AddNWrathProvider(this ILoggingBuilder builder, ILogger baseLogger)
         {
             return builder.AddProvider(new NWrathLoggerProvider(baseLogger));
+        }
+
+        public static ConsoleLogger SysConsoleLogger(this ILoggingWizardCharms charms, LogLevel minLevel = LogLevel.Error, Action<ConsoleLogSerializer> serializerApply = null)
+        {
+            return LoggingWizard.Spell.ConsoleLogger(s =>
+            {
+                s.OutputTemplate = "[{Level}] {Message}{ExNewLine}{Exception}";
+                serializerApply?.Invoke(s);
+            });
+        }
+
+        public static ConsoleLogger SysConsoleLogger(this ILoggingWizardCharms charms, IStringLogSerializer serializer, LogLevel minLevel = LogLevel.Error)
+        {
+            return LoggingWizard.Spell.ConsoleLogger(serializer);
         }
 
         public static LogLevel ToNWrathLevel(this Microsoft.Extensions.Logging.LogLevel aspLogLevel)

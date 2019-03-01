@@ -10,6 +10,7 @@
     <RepositoryUrl>https://github.com/mkozylov/NWrath.Logging.AspNetCore/</RepositoryUrl>
     <Description>NWrath.Logging integration for  ASP.NET Core 2+</Description>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <Version>1.0.1</Version>
   </PropertyGroup>
 
   <ItemGroup>
