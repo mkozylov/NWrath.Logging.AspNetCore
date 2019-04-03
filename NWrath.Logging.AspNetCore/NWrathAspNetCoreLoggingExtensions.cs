@@ -176,18 +176,10 @@ namespace NWrath.Logging.AspNetCore
                     s.OutputTemplate = "[{Level}] {Message}{ExNewLine}{Exception}";
                 });
 
-                targetLogger = LoggingWizard.Spell.LambdaLogger(
-                    record =>
-                    {
-                        console.Log(record);
-                        baseLogger.Log(record);
-                    },
-                    batch =>
-                    {
-                        console.Log(batch);
-                        baseLogger.Log(batch);
-                    }
-                );
+                targetLogger = new LambdaLogger(batch => {
+                    console.Log(batch);
+                    baseLogger.Log(batch);
+                });
             }
 
             return LoggingWizard.Spell.BackgroundLogger(targetLogger, emergencyLogger: emergencyLogger);
