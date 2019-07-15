@@ -3,20 +3,41 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System;
+using NWrath.Logging;
+using NWrath.Synergy.Common.Extensions;
+using System.Runtime.CompilerServices;
 
 namespace NWrath.Logging.AspNetCore
 {
     public static class NWrathAspNetCoreLoggingExtensions
     {
+        public static string DefaultRollingFolderPath { get; set; } = "Logs";
+
         public static IWebHostBuilder UseNWrathRollingFileLogging(
             this IWebHostBuilder hostBuilder,
             string folderPath = "Logs",
             LogLevel minLevel = LogLevel.Error
             )
         {
-            var baseLogger = DefaultLoggerSet(
-                LoggingWizard.Spell.RollingFileLogger(folderPath, minLevel: minLevel)
-                );
+            var baseLogger = LoggingWizard.Spell.RollingFileLogger(folderPath, background: false);
+
+            var emergencyLogger = default(ILogger);
+
+            if (Environment.UserInteractive)
+            {
+                var mainLogger = baseLogger;
+
+                var console = AppConsoleLogger();
+
+                emergencyLogger = new LambdaLogger(
+                    r => console.Log(r),
+                    b => { /*ignore emergency batch rewrite, write only error*/ }
+                    );
+                
+                baseLogger = new CompositeLogger(new[] { console, mainLogger });
+            }
+            
+            baseLogger = LoggingWizard.Spell.BackgroundLogger(baseLogger, minLevel, emergencyLogger: emergencyLogger);
 
             return hostBuilder.UseNWrathLogging(baseLogger);
         }
@@ -62,7 +83,7 @@ namespace NWrath.Logging.AspNetCore
             LogLevel minLevel = LogLevel.Error
             )
         {
-            var emergencyLogger = LoggingWizard.Spell.RollingFileLogger(emergencyLoggerFolderPath);
+            var emergencyLogger = LoggingWizard.Spell.RollingFileLogger(emergencyLoggerFolderPath, background: false);
 
             return hostBuilder.UseNWrathDbLogging(dbSchemaApply, emergencyLogger, minLevel);
         }
@@ -74,24 +95,42 @@ namespace NWrath.Logging.AspNetCore
             LogLevel minLevel = LogLevel.Error
             )
         {
-            var baseLogger = DefaultLoggerSet(
-                LoggingWizard.Spell.DbLogger(minLevel, dbSchemaApply),
-                emergencyLogger
-                );
+            var baseLogger = LoggingWizard.Spell.DbLogger(dbSchemaApply, background: false);
+
+            if (Environment.UserInteractive 
+                && emergencyLogger is ConsoleLogger == false 
+                && emergencyLogger.CastAs<BackgroundLogger>()?.EmergencyLogger is ConsoleLogger == false
+                )
+            {
+                var mainLogger = baseLogger;
+
+                var console = AppConsoleLogger();
+
+                baseLogger = new CompositeLogger(new[] { console, mainLogger });
+            }
+
+            baseLogger = LoggingWizard.Spell.BackgroundLogger(baseLogger, minLevel, emergencyLogger: emergencyLogger);
 
             return hostBuilder.UseNWrathLogging(baseLogger);
         }
 
         public static IWebHostBuilder UseNWrathLogging(this IWebHostBuilder hostBuilder, string sectionPath, string appsettingsPath = "appsettings.json")
         {
-            var logger = LoggingWizard.Spell.LoadFromJson(appsettingsPath, sectionPath);
+            var baseLogger = LoggingWizard.Spell.LoadFromJson(appsettingsPath, sectionPath, background: false);
 
-            return hostBuilder.UseNWrathLogging(logger);
+            if (baseLogger is BackgroundLogger == false)
+            {
+                var emergencyLogger = AppRollingFileLogger();
+
+                baseLogger = LoggingWizard.Spell.BackgroundLogger(baseLogger, baseLogger.RecordVerifier, emergencyLogger: emergencyLogger);
+            }
+
+            return hostBuilder.UseNWrathLogging(baseLogger);
         }
 
         public static IWebHostBuilder UseNWrathLogging(this IWebHostBuilder hostBuilder, Func<ILoggingWizardCharms, ILogger[]> loggersFactory, Action<ILogger, IConfiguration, ILoggingBuilder> configure = null, LogLevel minLevel = LogLevel.Error)
         {
-            var baseLogger = LoggingWizard.Spell.CompositeLogger(minLevel, loggersFactory(LoggingWizard.Spell));
+            var baseLogger = LoggingWizard.Spell.CompositeLogger(minLevel, background: true, loggersFactory(LoggingWizard.Spell));
 
             return hostBuilder.UseNWrathLogging(baseLogger, configure);
         }
@@ -127,18 +166,26 @@ namespace NWrath.Logging.AspNetCore
             return builder.AddProvider(new NWrathLoggerProvider(baseLogger));
         }
 
-        public static ConsoleLogger SysConsoleLogger(this ILoggingWizardCharms charms, LogLevel minLevel = LogLevel.Error, Action<ConsoleLogSerializer> serializerApply = null)
+        public static ILogger SysConsoleLogger(this ILoggingWizardCharms charms, LogLevel minLevel = LogLevel.Error, Action<ConsoleLogSerializer> serializerApply = null)
         {
-            return LoggingWizard.Spell.ConsoleLogger(s =>
+            var logger = LoggingWizard.Spell.ConsoleLogger(s =>
             {
                 s.OutputTemplate = "[{Level}] {Message}{ExNewLine}{Exception}";
                 serializerApply?.Invoke(s);
             });
+
+            logger.IsEnabled = Environment.UserInteractive;
+
+            return logger;
         }
 
-        public static ConsoleLogger SysConsoleLogger(this ILoggingWizardCharms charms, IStringLogSerializer serializer, LogLevel minLevel = LogLevel.Error)
+        public static ILogger SysConsoleLogger(this ILoggingWizardCharms charms, IStringLogSerializer serializer, LogLevel minLevel = LogLevel.Error)
         {
-            return LoggingWizard.Spell.ConsoleLogger(serializer);
+            var logger = LoggingWizard.Spell.ConsoleLogger(serializer);
+
+            logger.IsEnabled = Environment.UserInteractive;
+
+            return logger;
         }
 
         public static LogLevel ToNWrathLevel(this Microsoft.Extensions.Logging.LogLevel aspLogLevel)
@@ -165,24 +212,17 @@ namespace NWrath.Logging.AspNetCore
             }
         }
 
-        private static ILogger DefaultLoggerSet(ILogger baseLogger, ILogger emergencyLogger = null)
+        private static ILogger AppRollingFileLogger()
         {
-            var targetLogger = baseLogger;
+            return LoggingWizard.Spell.RollingFileLogger(DefaultRollingFolderPath, background: false);
+        }
 
-            if (Environment.UserInteractive)
+        private static ILogger AppConsoleLogger()
+        {
+            return LoggingWizard.Spell.ConsoleLogger(s =>
             {
-                var console = LoggingWizard.Spell.ConsoleLogger(s =>
-                {
-                    s.OutputTemplate = "[{Level}] {Message}{ExNewLine}{Exception}";
-                });
-
-                targetLogger = new LambdaLogger(batch => {
-                    console.Log(batch);
-                    baseLogger.Log(batch);
-                });
-            }
-
-            return LoggingWizard.Spell.BackgroundLogger(targetLogger, emergencyLogger: emergencyLogger);
+                s.OutputTemplate = "[{Level}] {Message}{ExNewLine}{Exception}";
+            }, background: false);
         }
     }
 }

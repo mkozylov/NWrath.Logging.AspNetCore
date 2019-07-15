@@ -1,5 +1,6 @@
 ﻿using System;
 using Microsoft.Extensions.Logging;
+using NWrath.Logging;
 
 namespace NWrath.Logging.AspNetCore
 {
@@ -25,7 +26,7 @@ namespace NWrath.Logging.AspNetCore
             Func<TState, Exception, string> formatter
             )
         {
-            Log(message: formatter(state, null),
+            this.Log(message: formatter(state, null),
                 level: logLevel.ToNWrathLevel(),
                 exception: exception,
                 extra: new { EventId = eventId }
